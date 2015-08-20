@@ -1,0 +1,115 @@
+#!/bin/bash
+
+echo "please 'nvt repo sync' first"
+echo "if not create brach, please create it first: nvt repo start my_winterfell_dev --all"
+if [ $# != 4 ];then
+	#echo 'please input parameters like: 10-3-0-26 20141028 sl_master/sl_10_3_1(throttl)'
+	echo 'please input parameters like: 20150603 W001-10-3-2MN-114  W002-10-3-2MN-114 sl_master/sl_10_3_1(throttl)'
+	exit 
+fi
+
+#DROP_VER=10-3-0-26
+DROP_DATE=$1
+#DROP_DATE=20141028
+DROP_VER=$2
+CODE_VER=$3
+#VIEW_NAME=sl_master
+VIEW_NAME=$4
+
+#DROP_NAME=$DROP_VER$DROP_DATE
+DROP_NAME=$DROP_DATE"-"$DROP_VER
+#DROP_NAME_DEV=$DROP_VER"dev"$DROP_DATE
+DROP_DIR="wistron_java_ue_drop"$CODE_VER"-"$DROP_DATE
+DROP_CODE=$DROP_DIR.tgz
+#DROP_CODE="wistron_java_ue_drop11-0-1MN-W003_20150626".tgz
+DROP_PKG=$DROP_NAME.tgz
+DROP_ROOT=/ws/fanwang2/sync-wistron-drop
+
+
+WF_UBOOT="wistron_dspg_dvf99_78xx_sboot"
+WF_KERNEL="wistron_dspg_dvf99_78xx_skern"
+WF_FS="wistron_dspg_dvf99_78xx_rootfs.tgz"
+SP_UBOOT="wistron_ti_subarctic_78xx_sboot"
+SP_KERNEL="wistron_ti_subarctic_78xx_skern"
+SP_FS="wistron_ti_subarctic_78xx_rootfs.tgz"
+
+WF_UBOOT_DEV=$WF_UBOOT"-dev"
+WF_KERNEL_DEV=$WF_KERNEL"-dev"
+SP_UBOOT_DEV=$SP_UBOOT"-dev"
+SP_KERNEL_DEV=$SP_KERNEL"-dev"
+
+echo "Download $DROP_PKG "
+cd $DROP_ROOT
+rm -rf $DROP_PKG
+ftp -inv  << !
+open 10.74.53.67
+user winterfell cisco123
+
+binary
+cd 11.0 
+get $DROP_PKG
+get $DROP_CODE
+bye
+!
+
+chmod -R 777 $DROP_ROOT/$DROP_PKG
+
+tar -xzf $DROP_PKG
+
+
+echo "Copy DSPG uboot, kernl and filesystem"
+#cd $DROP_NAME
+cd package
+cp ./$WF_UBOOT /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_dspg_dvf99_78xx_sboot
+cp ./$WF_UBOOT_DEV /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_dspg_dvf99_78xx_sboot-dev
+cp ./$WF_KERNEL /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_dspg_dvf99_78xx_skern
+cp ./$WF_KERNEL_DEV /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_dspg_dvf99_78xx_skern-dev
+cp ./$WF_FS /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_dspg_dvf99_78xx_rootfs.tgz
+
+echo "Copy TI uboot, kernl and filesystem"
+cp ./$SP_UBOOT /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_ti_subarctic_78xx_sboot
+cp ./$SP_UBOOT_DEV /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_ti_subarctic_78xx_sboot-dev
+cp ./$SP_KERNEL /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_ti_subarctic_78xx_skern
+cp ./$SP_KERNEL_DEV /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_ti_subarctic_78xx_skern-dev
+cp ./$SP_FS /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor/wistron_ti_subarctic_78xx_rootfs.tgz
+
+echo "Copy DSPG low level api"
+tar -xzf $WF_FS >> /dev/null 2>&1
+cp ./dspg/rel/usr/lib/libplatform.so /ws/$USER/$VIEW_NAME/ip_sl/infra/lib/snoopyplus/dspg_dvf99
+cp ./dspg/rel/usr/lib/libioapi.so /ws/$USER/$VIEW_NAME/ip_sl/infra/lib/snoopyplus/dspg_dvf99
+cp ./dspg/rel/usr/lib/libupgapi.so /ws/$USER/$VIEW_NAME/ip_sl/infra/lib/snoopyplus/dspg_dvf99
+
+echo "Copy TI low level api"
+tar -xzf $SP_FS >> /dev/null 2>&1
+cp ./ti/rel/usr/lib/libplatform.so /ws/$USER/$VIEW_NAME/ip_sl/infra/lib/snoopyplus/ti_subarctic
+cp ./ti/rel/usr/lib/libioapi.so /ws/$USER/$VIEW_NAME/ip_sl/infra/lib/snoopyplus/ti_subarctic
+cp ./ti/rel/usr/lib/libupgapi.so /ws/$USER/$VIEW_NAME/ip_sl/infra/lib/snoopyplus/ti_subarctic
+
+echo "Copy java souce code"
+cd ..
+tar -xzf $DROP_CODE >> /dev/null 2>&1
+#cd $DROP_DIR
+cd snoopy_ue
+tar -cf snoopyplus.wistron.tar CIP_Common CIP_Models CIP_Test
+gzip snoopyplus.wistron.tar
+
+cp ./snoopyplus.wistron.tar.gz /ws/$USER/$VIEW_NAME/ip_sl/java/vendor
+
+echo "Sync in files"
+cd /ws/$USER/$VIEW_NAME/ip_sl/infra/target/vendor
+time /opt/vde/services/instances/vde_latest/bin/vde_tool sync_in --Vno_symlink wistron_dspg_dvf99_78xx_sboot wistron_dspg_dvf99_78xx_sboot-dev wistron_dspg_dvf99_78xx_skern wistron_dspg_dvf99_78xx_skern-dev wistron_ti_subarctic_78xx_sboot wistron_ti_subarctic_78xx_sboot-dev wistron_ti_subarctic_78xx_skern wistron_ti_subarctic_78xx_skern-dev 
+cd /ws/$USER/$VIEW_NAME/ip_sl/infra/lib/snoopyplus
+time /opt/vde/services/instances/vde_latest/bin/vde_tool sync_in --Vno_symlink dspg_dvf99/libplatform.so dspg_dvf99/libioapi.so dspg_dvf99/libupgapi.so
+time /opt/vde/services/instances/vde_latest/bin/vde_tool sync_in --Vno_symlink ti_subarctic/libplatform.so ti_subarctic/libioapi.so ti_subarctic/libupgapi.so
+
+time /opt/vde/services/instances/vde_latest/bin/vde_tool -Vno_sync git status -uno
+
+cd /ws/$USER/$VIEW_NAME/ip_sl/java/vendor
+time /opt/vde/services/instances/vde_latest/bin/vde_tool sync_in --Vno_symlink snoopyplus.wistron.tar.gz
+
+time /opt/vde/services/instances/vde_latest/bin/vde_tool -Vno_sync git status -uno
+
+echo "cd /ws/$USER/$VIEW_NAME/ip_sl/infra"
+echo "nvt git diff"
+echo "nvt git commit -am  "CSCug41647-Update Vendor v37 drop""
+echo "nvt repo upload --no-verify"

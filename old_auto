@@ -1,0 +1,96 @@
+#!/bin/sh
+
+if [ $# != 2 ]; then
+    echo "please input parameters like: be  rel| sp dev | tnp dev | rt"
+    exit
+fi
+
+#PHONE_MODE=sp
+PHONE_MODE="$1"
+CODE_VER="$2"
+FILE_NUM=`ls *bin | wc -l`
+echo "Will sign these files"
+ls *bin
+for((i=1; i<FILE_NUM; i++))
+	do
+		FILE[$i]=
+	done
+FILE[1]=`ls  sboot2*.bin  | awk -F. '{print $1"."$2"."$3"."$4}'`
+FILE[2]=`ls  rootfs2*.bin  | awk -F. '{print $1"."$2"."$3}'`
+FILE[3]=`ls  kern2*.bin  | awk -F. '{print $1"."$2"."$3}'`
+
+echo "FILE LIST:"
+for((i=1; i<=3; i++))
+do
+  echo "${FILE[$i]}"
+done
+
+PRE=`ls  *.preloads  | awk -F. '{print $1"."$2}'`
+echo $PRE
+
+echo "Begin to parse signer file."
+lineno1=`cat signer1 |  awk '{print NF}'`
+  for((i=1; i<=lineno1; i++))
+  do
+    signer1[$i]=`cat signer1|awk '{print $f}' f=$i`
+  done
+echo "Signer is ${signer1[1]}, have $lineno1 - 1 keys."
+
+lineno2=`cat signer2 |  awk '{print NF}'`
+  for((i=1; i<=lineno2; i++))
+  do
+    signer2[$i]=`cat signer2|awk '{print $f}' f=$i`
+  done
+echo "Signer is ${signer2[1]}, have $lineno2 - 1 keys."
+
+if [ $lineno1 -gt $lineno2 ];then
+   lineno=$lineno1
+else
+   lineno=$lineno2
+fi
+
+if [ $lineno -lt 5 ];then
+   echo "We need at least 4 tokens for each userid."
+   exit 1
+fi
+
+echo "Begin to sign file..."
+i=2;
+for((j=1; j<4; i++, j++))
+do
+  if [ $i -gt $lineno ];then
+   echo "Sign failed too many times, token is not enough. Pls refresh the tokens, and try again."
+   exit 1
+  fi
+  
+  echo "Begin to sign ${FILE[$j]}."
+  ./mlosign -c snoopyplus release ${signer1[1]} ${signer1[$i]} ${signer2[1]} ${signer2[$i]} ${FILE[$j]}.bin ${FILE[$j]}.sbn
+  if [ $? -eq 0 ];then
+   size[$j]=`ls -l ${FILE[$j]}.sbn | cut -f5 -d' '`
+  else
+   echo "Sign ${FILE[$j]} failed, try again."
+   j=`expr $j - 1`
+  fi
+done
+
+
+cat *.preloads |\
+ sed "s/^sboot.*/sboot=${FILE[1]}.sbn size=${size[1]}/g" |\
+   sed "s/^kern.*/kern=${FILE[3]}.sbn size=${size[3]}/g" |\
+     sed "s/^rootfs.*/rootfs=${FILE[2]}.sbn size=${size[2]}/g"\
+       > $PRE.mypreloads2
+
+echo "Begin to sign $PRE"
+
+for(( ; i<=$lineno; i++))
+do
+  ./mlosign -c snoopyplus release ${signer1[1]} ${signer1[$i]} ${signer2[1]} ${signer2[$i]} $PRE.mypreloads2  $PRE.loads
+  if [ $? -eq 0 ];then
+    echo "Done."
+    exit 0;
+  fi
+done
+
+echo "Sign failed too many times, token is not enough. Pls refresh the tokens, and try again."
+exit 1
+
