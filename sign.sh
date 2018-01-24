@@ -6,8 +6,8 @@
 # Distributed under terms of the MIT license.
 #
 
-
-declare -a FILES
+#声明 关联数组
+declare -a FILES 
 declare -a TOKENS1
 declare -a TOKENS2
 
