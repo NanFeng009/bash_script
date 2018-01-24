@@ -1,0 +1,30 @@
+#!/bin/bash
+#count the sum of different type for following file
+#Functional/KE//get_msg1_ra_error_004,pass,input msg1 is NULL,,
+#Functional/sec_pve/provisiong enclave/SEC_PVE_TEST_01,pass,Check PSW installed PvE should NOT request license key,,
+#Functional/QEINT/QE/init_quote_func_13,fail,sgx_init_quote basic test: happy path ,,
+
+if [ $# -ne 1 ];
+then
+    echo "Usage: $0 filename";
+    exit -1
+fi
+
+filename=$1
+#declare array
+declare -A planed
+declare -A passed
+declare -A ignored
+declare -A failed
+#declare date
+pl_sum=0
+pa_sum=0
+i_sum=0
+f_sum=0
+
+awk 'BEGIN{getline; FS="/"; printf("%-14s%-14s%-14s%-14s%-14s\n", "ID", "Planed", "Passed", "Failed", "Ignored")}
+{ planed[$2]++;pl_sum++; split($0,tmp_arr,",");if("pass"==tmp_arr[2]) {passed[$2]++;pa_sum++} else if("fail"==tmp_arr[2]) {failed[$2]++;f_sum++} else {ignored[$2]++;i_sum++} }
+END{ for(ind in planed)
+{ printf("%-14s%-14d%-14d%-14d%-14d\n",ind,planed[ind],passed[ind],failed[ind], ignored[ind])}
+printf("%14s%-14d%-14d%-14d%-14d\n","",pl_sum,pa_sum,f_sum,i_sum);
+}' $filename
